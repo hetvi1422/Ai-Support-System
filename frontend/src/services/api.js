@@ -3,27 +3,20 @@ import axios from 'axios';
 const API_BASE_URL = 'http://localhost:8000/api';
 
 export const api = {
-  // Ingest / Test a ticket
-  ingestTicket: async (ticketData) => {
-    const response = await axios.post(`${API_BASE_URL}/tickets/ingest`, ticketData);
+  createMeeting: async (meetingData) => {
+    const response = await axios.post(`${API_BASE_URL}/meetings`, meetingData);
     return response.data;
   },
-  
-  // Fetch all tickets for agent review
-  getTickets: async () => {
-    const response = await axios.get(`${API_BASE_URL}/tickets`);
+  getMeetings: async () => {
+    const response = await axios.get(`${API_BASE_URL}/meetings`);
     return response.data;
   },
-
-  // Submit Agent Feedback (Accept / Edit / Reject)
-  submitFeedback: async (ticketId, feedbackData) => {
-    const response = await axios.post(`${API_BASE_URL}/tickets/${ticketId}/feedback`, feedbackData);
+  getActionItems: async () => {
+    const response = await axios.get(`${API_BASE_URL}/action-items`);
     return response.data;
   },
-
-  // Fetch Manager Analytics
-  getAnalytics: async () => {
-    const response = await axios.get(`${API_BASE_URL}/analytics/dashboard`);
+  updateActionItem: async (id, updateData) => {
+    const response = await axios.put(`${API_BASE_URL}/action-items/${id}`, updateData);
     return response.data;
   }
 };

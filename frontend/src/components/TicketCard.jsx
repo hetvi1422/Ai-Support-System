@@ -12,37 +12,41 @@ export default function TicketCard({ ticket, onAction }) {
   };
 
   return (
-    
-      
-        
-          {ticket.customer_name}
-          ({ticket.channel} • {ticket.language.toUpperCase()})
-        
-        
-          
+    <div className="bg-white border rounded-lg shadow-sm p-6 mb-4">
+      <div className="flex justify-between items-center mb-3">
+        <div>
+          <span className="font-bold text-lg text-gray-900">{ticket.customer_name}</span>
+          <span className="text-sm text-gray-500 ml-2">({ticket.channel} • {ticket.language.toUpperCase()})</span>
+        </div>
+        <div className="flex gap-2">
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${sentimentColors[ticket.sentiment] || sentimentColors.NEUTRAL}`}>
             {ticket.sentiment}
-          
-          
+          </span>
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
             {ticket.category}
-          
-        
-      
+          </span>
+        </div>
+      </div>
 
-      
-        INCOMING MESSAGE
+      <div className="bg-gray-50 p-3 rounded-md mb-4 border text-gray-700 text-sm">
+        <p className="font-medium text-xs text-gray-500 mb-1">INCOMING MESSAGE</p>
         {ticket.original_message}
-      
+      </div>
 
       {ticket.is_sensitive && (
-        
+        <div className="bg-amber-50 border-l-4 border-amber-500 p-3 mb-4 rounded text-xs text-amber-800 font-medium">
           ⚠️ Policy Alert: High-risk or refund-related inquiry. Supervisor verification required prior to sending.
-        
+        </div>
       )}
 
-      
-        AI SUGGESTED DRAFT
+      <div className="mb-4">
+        <p className="font-medium text-xs text-gray-500 mb-1">AI SUGGESTED DRAFT</p>
         {isEditing ? (
-           setDraft(e.target.value)}
+          <textarea
+            className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            rows={4}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
           />
         ) : (
           <div className="p-3 bg-blue-50/50 border border-blue-100 rounded text-sm text-gray-800">
