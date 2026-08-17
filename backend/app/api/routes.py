@@ -1,87 +1,101 @@
+import hashlib
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models import schema
+from app.schemas import pydantic_models
 from app.services.ai_engine import process_meeting_transcript
 from pydantic import BaseModel
-from typing import List, Optional
 
 router = APIRouter()
 
-# --- Schemas for Incoming Requests ---
-class TranscriptUpload(BaseModel):
-    title: str
-    meeting_type: str
-    participants: str
-    transcript: str
+# --- Auth Models ---
+class UserAuth(BaseModel):
+    email: str
+    password: str
 
-class ActionItemUpdate(BaseModel):
-    status: Optional[str] = None
-    priority: Optional[str] = None
-    owner: Optional[str] = None
+def get_password_hash(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
 
-# --- API Endpoints ---
-
-@router.post("/meetings")
-def create_meeting(data: TranscriptUpload, db: Session = Depends(get_db)):
-    # 1. Process transcript with AI
-    ai_result = process_meeting_transcript(data.transcript)
+# --- Auth Routes ---
+@router.post("/register")
+def register_user(user: UserAuth, db: Session = Depends(get_db)):
+    existing_user = db.query(schema.User).filter(schema.User.email == user.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
     
-    # 2. Save the Meeting to the database
-    new_meeting = schema.Meeting(
-        title=data.title,
-        meeting_type=data.meeting_type,
-        participants=data.participants,
-        transcript=data.transcript,
-        summary=ai_result.get("summary", ""),
-        key_points=ai_result.get("key_points", ""),
-        decisions=ai_result.get("decisions", ""),
-        risks=ai_result.get("risks", ""),
-        unanswered_questions=ai_result.get("unanswered_questions", "")
-    )
-    db.add(new_meeting)
+    hashed_pw = get_password_hash(user.password)
+    new_user = schema.User(email=user.email, password_hash=hashed_pw)
+    db.add(new_user)
     db.commit()
-    db.refresh(new_meeting)
+    return {"message": "User created successfully", "email": new_user.email}
+
+@router.post("/login")
+def login_user(user: UserAuth, db: Session = Depends(get_db)):
+    db_user = db.query(schema.User).filter(schema.User.email == user.email).first()
+    if not db_user or db_user.password_hash != get_password_hash(user.password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    return {"message": "Login successful", "email": db_user.email}
+
+# --- Meeting Routes ---
+@router.post("/meetings")
+def create_meeting(meeting: pydantic_models.MeetingCreate, db: Session = Depends(get_db)):
+    # 1. Send text to Gemini
+    ai_result = process_meeting_transcript(meeting.transcript)
     
-    # 3. Save the Action Items to the database
+    # 2. Save Meeting
+    db_meeting = schema.Meeting(
+        title=meeting.title,
+        meeting_type=meeting.meeting_type,
+        participants=meeting.participants,
+        transcript=meeting.transcript,
+        summary=ai_result.get("summary", ""),
+        decisions=ai_result.get("decisions", "")
+    )
+    db.add(db_meeting)
+    db.commit()
+    db.refresh(db_meeting)
+    
+    # 3. Save Action Items
     action_items_data = ai_result.get("action_items", [])
     for item in action_items_data:
-        new_action = schema.ActionItem(
-            meeting_id=new_meeting.id,
+        db_action = schema.ActionItem(
+            meeting_id=db_meeting.id,
             description=item.get("description", ""),
             owner=item.get("owner", "Unassigned"),
-            due_date=item.get("due_date", "Not specified"),
+            due_date=item.get("due_date", ""),
             priority=item.get("priority", "Medium"),
-            status="Open"
+            status=item.get("status", "Open")
         )
-        db.add(new_action)
+        db.add(db_action)
     
     db.commit()
-    return {"message": "Meeting processed successfully", "meeting_id": new_meeting.id}
+    return db_meeting
 
 @router.get("/meetings")
-def get_all_meetings(db: Session = Depends(get_db)):
-    meetings = db.query(schema.Meeting).order_by(schema.Meeting.created_at.desc()).all()
-    return meetings
+def get_meetings(db: Session = Depends(get_db)):
+    return db.query(schema.Meeting).order_by(schema.Meeting.created_at.desc()).all()
 
+@router.delete("/meetings/{meeting_id}")
+def delete_meeting(meeting_id: str, db: Session = Depends(get_db)):
+    meeting = db.query(schema.Meeting).filter(schema.Meeting.id == meeting_id).first()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    db.delete(meeting)
+    db.commit()
+    return {"message": "Meeting deleted successfully"}
+
+# --- Action Item Routes ---
 @router.get("/action-items")
-def get_all_action_items(db: Session = Depends(get_db)):
-    items = db.query(schema.ActionItem).all()
-    return items
+def get_action_items(db: Session = Depends(get_db)):
+    return db.query(schema.ActionItem).all()
 
 @router.put("/action-items/{item_id}")
-def update_action_item(item_id: str, update_data: ActionItemUpdate, db: Session = Depends(get_db)):
-    item = db.query(schema.ActionItem).filter(schema.ActionItem.id == item_id).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Action item not found")
+def update_action_item(item_id: str, status_update: pydantic_models.ActionItemUpdate, db: Session = Depends(get_db)):
+    db_item = db.query(schema.ActionItem).filter(schema.ActionItem.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Item not found")
     
-    if update_data.status:
-        item.status = update_data.status
-    if update_data.priority:
-        item.priority = update_data.priority
-    if update_data.owner:
-        item.owner = update_data.owner
-        
+    db_item.status = status_update.status
     db.commit()
-    db.refresh(item)
-    return item
+    return db_item

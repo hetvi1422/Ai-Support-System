@@ -1,22 +1,25 @@
-from fastapi import FastAPI, Depends
-from sqlalchemy.orm import Session
-from app.core.database import engine, Base, get_db
-from app.models import schema
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.core.database import engine, Base
+from app.api import routes
 
-# Create all tables in the PostgreSQL database
-schema.Base.metadata.create_all(bind=engine)
+# 1. This tells the database to automatically create our new Meeting and ActionItem tables!
+Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="AI Support System Backend")
+app = FastAPI(title="Zignuts AI Tracker")
+
+# 2. This fixes the CORS error by telling FastAPI to accept requests from our React frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"], 
+    allow_headers=["*"], 
+)
+
+# 3. This attaches our Zignuts routes to the /api URL
+app.include_router(routes.router, prefix="/api")
 
 @app.get("/")
-def read_root():
-    return {"message": "FastAPI is running and Database is connected!"}
-
-# Quick test endpoint to verify DB
-@app.get("/db-check")
-def check_db(db: Session = Depends(get_db)):
-    return {"status": "Database connection successful!"}
-
-from app.api.routes import router as api_router
-
-app.include_router(api_router, prefix="/api")
+def root():
+    return {"status": "Zignuts Backend is running perfectly!"}

@@ -16,8 +16,8 @@ services:
     build: ./backend
     ports:
       - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql://admin:password123@db:5432/support_db
+    env_file:             # <--- We updated this part!
+      - .env              # <--- Now it will read your Gemini API Key
     depends_on:
       - db
     volumes:
